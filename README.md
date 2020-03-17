@@ -1,5 +1,5 @@
 # DataWarks原理知识
-datawork基础知识介绍+实操培训
+dataworks基础知识介绍+实操培训
 
 - ## DataWorks大数据开发平台架构
   - ### 数据集成-全域数据汇集
@@ -82,15 +82,15 @@ datawork基础知识介绍+实操培训
 
   - 开通地址:https://data.aliyun.com/product/ide?spm=5176.10695662.881989.1.52434695XIl4Yx
   - ### 开通过程：  
-    - 目前按量付费，开通不需要付费，基础版免费
+    - #### 目前按量付费，开通不需要付费，基础版免费
   ![](./image/8.png)
   ![](./image/9.png)
   ![](./image/10.png)
-    - 需要选工作空间的计算引擎服务，仍然需要开发按量付费功能，开通免费；然后勾选该服务进行下一步。
+    - #### 需要选工作空间的计算引擎服务，仍然需要开发按量付费功能，开通免费；然后勾选该服务进行下一步。
   ![](./image/11.png)
-    - 需要填写实例显示名称，创建实例
+    - #### 需要填写实例显示名称，创建实例
   ![](./image/12.png)
-    - 稍等片刻成功后，点击进入数据开发
+    - #### 稍等片刻成功后，点击进入数据开发
   ![](./image/13.png)
 
   - ### 业务实战
@@ -121,9 +121,42 @@ datawork基础知识介绍+实操培训
   ![](./image/29.png)
     - #### 同理完成MySql的新建
   ![](./image/30.png)
-  ![](./image/25.png)
-  ![](./image/25.png)
-  ![](./image/25.png)
+    - #### 返回主界面，双击进入日志数据，根据步骤填入数据源（具体填写参考help详情链接）、字段映射、通道控制
+  ![](./image/31.png)
+    - #### 在数据去向中选择ODPS,根据文档中方法创建两张表
+  ![](./image/32.png)
+    - #### 新建表
+        - 在数据开发页面打开新建的业务流程，右键单击MaxCompute，选择新建 > 表。在新建表对话框中，输入表名，单击提交。此处需要创建2张表（ods_raw_log_d和ods_user_info_d），分别存储同步过来的OSS日志数据和RDS日志数据。
+
+      - 通过DDL模式新建表。
+      新建ods_raw_log_d表。
+      双击ods_raw_log_d表，在右侧的编辑页面单击DDL模式，输入下述建表语句。
+  ![](./image/33.png)
+    ```sql
+      --创建OSS日志对应目标表
+      CREATE TABLE IF NOT EXISTS  ods_raw_log_d (
+          col STRING
+      )
+      PARTITIONED BY (
+          dt STRING
+      );
+    ```
+    - #### 新建ods_user_info_d表。 双击ods_user_info_d表，在右侧的编辑页面单击DDL模式，输入下述建表语句。
+    ```sql
+      --创建RDS对应目标表
+      CREATE TABLE IF NOT  EXISTS ods_user_info_d (
+          uid STRING COMMENT '用户ID',
+          gender STRING COMMENT '性别',
+          age_range STRING COMMENT '年龄段',
+          zodiac STRING COMMENT '星座'
+      )
+      PARTITIONED BY (
+          dt STRING
+      );
+    ```
+    - #### 建表语句输入完成后，单击生成表结构并确认覆盖当前操作。返回建表页面后，在基本属性中输入表的中文名。完成设置后，分别单击提交到开发环境和提交到生产环境。
+  
+  
   ![](./image/25.png)
   ![](./image/25.png)
 
