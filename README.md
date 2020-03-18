@@ -156,8 +156,183 @@ dataworks基础知识介绍+实操培训
       );
     ```
     - #### 建表语句输入完成后，单击生成表结构并确认覆盖当前操作。返回建表页面后，在基本属性中输入表的中文名。完成设置后，分别单击提交到开发环境和提交到生产环境。
-  
-  
-  ![](./image/25.png)
-  ![](./image/25.png)
+  ![](./image/34.png)
+    - #### 打开日志数据同步，在数据去向中选择刚才新增的ods_raw_log_d，可选择限流10MB/s
+  ![](./image/35.png)
+    - #### 同理打开用户数据同步，数据曲线选择ods_user_info_d，可选限流10MB/s，进行保存
+  ![](./image/36.png)
+    - #### 进入主界面海量日志分析，点击运行，右键日志数据同步可查看运行日志
+  ![](./image/37.png)
+  ![](./image/38.png)
+    - #### 点击放大镜，可以新建临时sql，进行查询，可看到相关数据已经写入
+  ![](./image/40.png)
+    - #### 返回主界面，再次拖入三个sql组件，日志数据清洗、用户和日志数据汇聚、用户画像分析。进行关联后，可点击进行自动排序
+  ![](./image/41.png)
+    - #### 新建对应的三张数据表
+    - 在数据开发面板，打开新建的业务流程，右键单击MaxCompute，选择新建 > 表。在新建表对话框中，输入表名，单击提交。此处需要创建3张表，分别为ODS层表（ods_log_info_d）、DW层表（dw_user_info_all_d）和RPT层表（rpt_user_info_d）。
+    - 通过DDL模式新建表。新建ods_log_info_d表。双击ods_log_info_d表，在右侧的编辑页面单击DDL模式，输入下述建表语句。
+    ```sql
+    --创建ODS层表
+    CREATE TABLE IF NOT EXISTS ods_log_info_d (
+      ip STRING COMMENT 'ip地址',
+      uid STRING COMMENT '用户ID',
+      time STRING COMMENT '时间yyyymmddhh:mi:ss',
+      status STRING COMMENT '服务器返回状态码',
+      bytes STRING COMMENT '返回给客户端的字节数',
+      region STRING COMMENT '地域，根据ip得到',
+      method STRING COMMENT 'http请求类型',
+      url STRING COMMENT 'url',
+      protocol STRING COMMENT 'http协议版本号',
+      referer STRING COMMENT '来源url',
+      device STRING COMMENT '终端类型 ',
+      identity STRING COMMENT '访问类型 crawler feed user unknown'
+    )
+    PARTITIONED BY (
+      dt STRING
+    );
+    ```
+    - 新建dw_user_info_all_d表。双击dw_user_info_all_d表，在右侧的编辑页面单击DDL模式，输入下述建表语句。
+    ```sql
+    --创建DW层表
+    CREATE TABLE IF NOT EXISTS dw_user_info_all_d (
+      uid STRING COMMENT '用户ID',
+      gender STRING COMMENT '性别',
+      age_range STRING COMMENT '年龄段',
+      zodiac STRING COMMENT '星座',
+      region STRING COMMENT '地域，根据ip得到',
+      device STRING COMMENT '终端类型 ',
+      identity STRING COMMENT '访问类型 crawler feed user unknown',
+      method STRING COMMENT 'http请求类型',
+      url STRING COMMENT 'url',
+      referer STRING COMMENT '来源url',
+      time STRING COMMENT '时间yyyymmddhh:mi:ss'
+    )
+    PARTITIONED BY (
+      dt STRING
+    );
+    ```
+    - 新建rpt_user_info_d表。双击rpt_user_info_d表，在右侧的编辑页面单击DDL模式，输入下述建表语句。
+    ```sql
+    --创建RPT层表
+    CREATE TABLE IF NOT EXISTS rpt_user_info_d (
+      uid STRING COMMENT '用户ID',
+      region STRING COMMENT '地域，根据ip得到',
+      device STRING COMMENT '终端类型 ',
+      pv BIGINT COMMENT 'pv',
+      gender STRING COMMENT '性别',
+      age_range STRING COMMENT '年龄段',
+      zodiac STRING COMMENT '星座'
+    )
+    PARTITIONED BY (
+      dt STRING
+    );
+    ```						
+    - 建表语句输入完成后，单击生成表结构并确认覆盖当前操作。返回建表页面后，在基本属性中输入表的中文名。完成设置后，分别单击提交到开发环境和提交到生产环境。
+  ![](./image/42.png)
+    - #### 完成上面操作后，下载jar包文件：http://docs-aliyun.cn-hangzhou.oss.aliyun-inc.com/assets/attach/85298/cn_zh/1532163718650/ip2region.jar?spm=a2c4g.11186623.2.24.10504b1blSWTAl&file=ip2region.jar
+    - #### 在资源栏右键新增上传下载的jar包，并上传至资源栏，右键新增函数，命名getregion
+  ![](./image/43.png)
+  ![](./image/44.png)
+    - #### 根据帮助文档填写对应内容，点击保存；
+    - #### 进入主界面双击进入对应sql表创建查询
+  ![](./image/45.png)
+    - #### 配置ODPS SQL节点
+      - 配置ods_log_info_d节点。双击ods_log_info_d节点，进入节点配置页面。在节点编辑页面，编写如下SQL语句。
+    ```sql
+    INSERT OVERWRITE TABLE ods_log_info_d PARTITION (dt=${bdp.system.bizdate})
+    SELECT ip
+      , uid
+      , time
+      , status
+      , bytes 
+      , getregion(ip) AS region --使用自定义UDF通过IP得到地域。
+      , regexp_substr(request, '(^[^ ]+ )') AS method --通过正则把request差分为3个字段。
+      , regexp_extract(request, '^[^ ]+ (.*) [^ ]+$') AS url
+      , regexp_substr(request, '([^ ]+$)') AS protocol 
+      , regexp_extract(referer, '^[^/]+://([^/]+){1}') AS referer --通过正则清晰refer，得到更精准的URL。
+      , CASE
+        WHEN TOLOWER(agent) RLIKE 'android' THEN 'android' --通过agent得到终端信息和访问形式。
+        WHEN TOLOWER(agent) RLIKE 'iphone' THEN 'iphone'
+        WHEN TOLOWER(agent) RLIKE 'ipad' THEN 'ipad'
+        WHEN TOLOWER(agent) RLIKE 'macintosh' THEN 'macintosh'
+        WHEN TOLOWER(agent) RLIKE 'windows phone' THEN 'windows_phone'
+        WHEN TOLOWER(agent) RLIKE 'windows' THEN 'windows_pc'
+        ELSE 'unknown'
+      END AS device
+      , CASE
+        WHEN TOLOWER(agent) RLIKE '(bot|spider|crawler|slurp)' THEN 'crawler'
+        WHEN TOLOWER(agent) RLIKE 'feed'
+        OR regexp_extract(request, '^[^ ]+ (.*) [^ ]+$') RLIKE 'feed' THEN 'feed'
+        WHEN TOLOWER(agent) NOT RLIKE '(bot|spider|crawler|feed|slurp)'
+        AND agent RLIKE '^[Mozilla|Opera]'
+        AND regexp_extract(request, '^[^ ]+ (.*) [^ ]+$') NOT RLIKE 'feed' THEN 'user'
+        ELSE 'unknown'
+      END AS identity
+      FROM (
+        SELECT SPLIT(col, '##@@')[0] AS ip
+        , SPLIT(col, '##@@')[1] AS uid
+        , SPLIT(col, '##@@')[2] AS time
+        , SPLIT(col, '##@@')[3] AS request
+        , SPLIT(col, '##@@')[4] AS status
+        , SPLIT(col, '##@@')[5] AS bytes
+        , SPLIT(col, '##@@')[6] AS referer
+        , SPLIT(col, '##@@')[7] AS agent
+      FROM ods_raw_log_d
+      WHERE dt = ${bdp.system.bizdate}
+    ) a;
+    ```
+    - 单击左上角的保存图标。
+    - 配置dw_user_info_all_d节点。
+      - 双击dw_user_info_all_d节点，进入节点配置页面。在节点编辑页面，编写如下SQL语句。
+    ```sql
+    INSERT OVERWRITE TABLE dw_user_info_all_d PARTITION (dt='${bdp.system.bizdate}')
+    SELECT COALESCE(a.uid, b.uid) AS uid
+      , b.gender
+      , b.age_range
+      , b.zodiac
+      , a.region
+      , a.device
+      , a.identity
+      , a.method
+      , a.url
+      , a.referer
+      , a.time
+    FROM (
+      SELECT *
+      FROM ods_log_info_d
+      WHERE dt = ${bdp.system.bizdate}
+    ) a
+    LEFT OUTER JOIN (
+      SELECT *
+      FROM ods_user_info_d
+      WHERE dt = ${bdp.system.bizdate}
+    ) b
+    ON a.uid = b.uid;
+    ```
+    - 单击左上角的保存图标。
+    - 配置rpt_user_info_d节点。
+      - 双击rpt_user_info_d节点，进入节点配置页面。在节点编辑页面，编写如下SQL语句。
+    ```sql
+    INSERT OVERWRITE TABLE rpt_user_info_d PARTITION (dt='${bdp.system.bizdate}')
+    SELECT uid
+      , MAX(region)
+      , MAX(device)
+      , COUNT(0) AS pv
+      , MAX(gender)
+      , MAX(age_range)
+      , MAX(zodiac)
+    FROM dw_user_info_all_d
+    WHERE dt = ${bdp.system.bizdate}
+    GROUP BY uid;
+    ```
+    - 单击左上角的保存图标。
+  ![](./image/46.png)
+    - #### 返回主界面，右键点击运行，并查看日志
+  ![](./image/47.png)
+  ![](./image/36.png)
+  ![](./image/36.png)
+  ![](./image/36.png)
+  ![](./image/36.png)
+  ![](./image/36.png)
+
 
